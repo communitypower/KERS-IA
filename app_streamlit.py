@@ -4,38 +4,19 @@ from dotenv import load_dotenv
 from kers_assistant import (
     CatalogError,
     INSUFFICIENT_CONTEXT_MESSAGE,
-    LLMConfigurationError,
-    LLMResponseError,
-    ask_llm,
-    build_context,
+    build_deepchat_prompt,
+    generate_sales_answer,
     load_catalog,
     retrieve,
 )
 
 load_dotenv()
 
-SYSTEM_PROMPT = """
-Voce e um assistente de vendas da KERS para representantes, vendedores de balcao e lojistas.
-
-Regras:
-1. Use somente o contexto fornecido.
-2. Se faltarem dados, diga explicitamente que o contexto publico nao basta.
-3. Estruture em:
-   - Produto recomendado
-   - Justificativa tecnica
-   - Como vender
-   - Objecao comum
-   - Resposta a objecao
-   - Venda adicional
-4. Nao invente especificacoes.
-5. Responda em portugues do Brasil.
-""".strip()
-
 RESULT_COLUMNS = ["sku", "nome", "categoria", "codigo", "score", "status_dados"]
 
 st.set_page_config(page_title="Assistente KERS", page_icon=":oncoming_automobile:", layout="wide")
 st.title("Assistente de Vendas KERS")
-st.caption("Versao profissional: base publica estruturada + resposta com OpenAI")
+st.caption("Versao profissional: base publica estruturada + resposta comercial local + DeepChat")
 
 question = st.text_input(
     "Pergunta do vendedor",
@@ -47,7 +28,6 @@ col1, col2 = st.columns([2, 1])
 if question:
     try:
         rows = retrieve(question, top_k=8, min_score=1)
-        context = build_context(rows)
     except CatalogError as exc:
         with col1:
             st.error(f"Erro ao carregar o catalogo: {exc}")
@@ -59,15 +39,12 @@ if question:
             if rows.empty:
                 st.warning(INSUFFICIENT_CONTEXT_MESSAGE)
             else:
-                try:
-                    with st.spinner("Consultando base e gerando resposta..."):
-                        answer = ask_llm(question, context, SYSTEM_PROMPT)
-                except LLMConfigurationError as exc:
-                    st.info(str(exc))
-                except LLMResponseError as exc:
-                    st.error(str(exc))
-                else:
-                    st.write(answer)
+                with st.spinner("Buscando na base e montando resposta..."):
+                    answer = generate_sales_answer(question, rows, response_style="full")
+                st.write(answer)
+
+                with st.expander("Prompt pronto para DeepChat"):
+                    st.code(build_deepchat_prompt(question, rows), language="text")
 
         with col2:
             st.subheader("Contexto usado")
