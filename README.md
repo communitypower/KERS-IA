@@ -1,2 +1,0 @@
-# KERS-IA
-readme
